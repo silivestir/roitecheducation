@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Splannes DiskPoint</title>
+        <link rel="stylesheet" href="index.css">
+    </head>
+    <header class="header-bar">
+        <div class="header"><a class="nav-link"  href="/livecoding.html">LiveCoding</a><a class="nav-link" href="liveclass.html">DocEditting</a><a class="nav-link" href="livechat.html">Chats</a></div>
+    </header>
+    <div>Chats</div>
+</html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Private Chat</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h1>Private Chat Application</h1>
+    <div>
+        <label for="username">Enter your username:</label>
+        <input type="text" id="username">
+        <button id="joinBtn">Join</button>
+    </div>
+
+    <div id="userList">
+        <h3>Users</h3>
+        <ul id="users"></ul>
+    </div>
+
+    <div id="chatWindow" style="display:none;">
+        <h3>Chat with <span id="targetUsername"></span></h3>
+        <div id="messages"></div>
+        <textarea id="messageInput" placeholder="Type your message..."></textarea>
+        <button id="sendMessageBtn">Send</button>
+        <button id="sendAudioBtn">Send Audio</button>
+        <div id="audioPlayer" style="display:none;">
+            <audio controls></audio>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script> 
+    
+    const socket = io();
+
+        let username = '';
+        let selectedUser = '';
+        
+        document.getElementById('joinBtn').addEventListener('click', () => {
+            username = document.getElementById('username').value;
+            if (username) {
+                socket.emit('user-join', username);
+                document.getElementById('userList').style.display = 'block';
+                document.getElementById('chatWindow').style.display = 'none';
+            }
+        });
+          
+        socket.on('user-list', (usernames) => {
+            const userList = document.getElementById('users');
+            userList.innerHTML = '';
+            usernames.forEach(user => {
+                const li = document.createElement('li');
+                li.textContent = user;
+                li.addEventListener('click', () => startPrivateChat(user));
+                userList.appendChild(li);
+            });
+        });
+        
+        function startPrivateChat(user) {
+            selectedUser = user;
+            document.getElementById('targetUsername').textContent = user;
+            document.getElementById('chatWindow').style.display = 'block';
+        }
+        
+        document.getElementById('sendMessageBtn').addEventListener('click', () => {
+            const message = document.getElementById('messageInput').value;
+            if (message && selectedUser) {
+                socket.emit('private-message', { to: selectedUser, message });
+                document.getElementById('messages').innerHTML += `<p><b>You:</b> ${message}</p>`;
+                document.getElementById('messageInput').value = '';
+            }
+        });
+        
+        socket.on('private-message', (data) => {
+            const { from, message } = data;
+            document.getElementById('messages').innerHTML += `<p><b>${from}:</b> ${message}</p>`;
+        });
+        
+        document.getElementById('sendAudioBtn').addEventListener('click', () => {
+            if (selectedUser) {
+                recordAudio();
+            }
+        });
+        
+        function recordAudio() {
+            navigator.mediaDevices.getUserMedia({ audio: true })
+                .then((stream) => {
+                    const mediaRecorder = new MediaRecorder(stream);
+                    mediaRecorder.start();
+        
+                    const audioChunks = [];
+                    mediaRecorder.ondataavailable = event => audioChunks.push(event.data);
+        
+                    mediaRecorder.onstop = () => {
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                        socket.emit('audio-message', { to: selectedUser, audioBlob });
+                    };
+        
+                    setTimeout(() => {
+                        mediaRecorder.stop();
+                    }, 5000);  // Record for 5 seconds
+                })
+                .catch((err) => console.error("Error accessing media devices.", err));
+        }
+        
+        socket.on('audio-message', (data) => {
+            const { from, audioBlob } = data;
+            const audioPlayer = document.getElementById('audioPlayer').querySelector('audio');
+            audioPlayer.src = URL.createObjectURL(audioBlob);
+            audioPlayer.style.display = 'block';
+            document.getElementById('messages').innerHTML += `<p><b>${from}:</b> <i>Audio message</i></p>`;
+        });
+        </script>
+</body>
+</html>
